@@ -4,7 +4,7 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 # Upload file
-golbym.Api/Uploads
+/golbym.Api/Uploads
 
 # User-specific files
 *.rsuser
