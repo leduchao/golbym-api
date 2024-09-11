@@ -68,6 +68,7 @@ public class PostModel
             Content = Content,
             Author = Author,
             ReleaseDate = ReleaseDate,
+            Thumbnail = Thumbnail
         };
 
         // var tags = Tags.Select(t => t.Name).ToList();

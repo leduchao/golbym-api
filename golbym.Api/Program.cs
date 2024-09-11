@@ -116,4 +116,4 @@ app.MapControllers();
 app.MapPostEndpoints();
 app.MapAuthEndpoint();
 
-app.Run();
+await app.RunAsync();
