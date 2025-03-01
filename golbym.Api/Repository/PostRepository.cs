@@ -3,6 +3,7 @@ using golbym.Api.DbContext;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Immutable;
 using golbym.Api.Domains;
+using golbym.Api.Models.ApiResponse;
 
 namespace golbym.Api.Repository
 {
@@ -47,12 +48,11 @@ namespace golbym.Api.Repository
 			return tag;
 		}
 
-		public async Task<List<Post>> GetRelatedPostsByTagNameAsync(string postId, List<string> tagName)
+		public IQueryable<Post> GetRelatedPostsByTagNameAsync(string postId, List<string> tagName)
 		{
-			return await context.Posts
+			return context.Posts
 				.Where(p => p.Id != postId && p.Tags.Any(t => tagName.Contains(t.Name)))
-				.Take(5)
-				.ToListAsync();
+				.Take(5);
 		}
 
 		public IQueryable<Post> GetPostByKeyword(string keyword)

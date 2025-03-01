@@ -5,4 +5,11 @@
 		public const string Admin = "Admin";
 		public const string Viewer = "Viewer";
 	}
+
+	public enum RoleType
+	{
+		None,
+		Admin,
+		Viewer,
+	}
 }

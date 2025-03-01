@@ -5,6 +5,7 @@ using golbym.Api.Models.Dtos;
 using golbym.Api.Repository;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace golbym.Api.Endpoints
 {
@@ -29,15 +30,9 @@ namespace golbym.Api.Endpoints
 			if (post is null)
 				return TypedResults.NotFound("This post is not found");
 
-			var model = new PostModel(post);
-			var postDto = model.ToDto();
+			var model = new PostResponse(post);
 
-			var tags = post.Tags.Select(t => t.Name).ToString() ?? "";
-			
-			if (string.IsNullOrEmpty(tags))
-				postDto.Tags = string.Join(",", tags);
-
-			return TypedResults.Ok(postDto);
+			return TypedResults.Ok(model);
 		}
 
 		private static async Task<IResult> GetRelatedPosts(PostRepository postRepository, string postId)
@@ -48,31 +43,27 @@ namespace golbym.Api.Endpoints
 				return TypedResults.NotFound("Cannot find post");
 
 			var tagName = post.Tags.Select(t => t.Name).ToList();
+			var relatedPosts = postRepository.GetRelatedPostsByTagNameAsync(postId, tagName);
+            var model = await relatedPosts.ToResponseModel();
 
-			var relatedPosts = await postRepository.GetRelatedPostsByTagNameAsync(postId, tagName);
-
-			return TypedResults.Ok(relatedPosts);
+            return TypedResults.Ok(model);
 		}
 
-		private static Ok<PagedResult<Post>> GetPosts(PostRepository postRepository, string keyword = "", int page = 1, int numberPosts = 9)
+		private static async Task<Ok<PagedResult<PostResponse>>> GetPosts(PostRepository postRepository, string keyword = "", int page = 1, int numberPosts = 9)
 		{
 
-			var posts = postRepository.GetPostByKeyword(keyword);
+			var posts = postRepository.GetPostByKeyword(keyword).Skip((page - 1) * numberPosts).Take(numberPosts);
+			var postResponseList = await posts.ToResponseModel();
 
-			// if (posts is null)
-			// 	return TypedResults.NotFound("No post founded!");
+			var totalItems = postResponseList.Count;
 
-			var totalItems = posts.Count();
-
-			posts = posts.Skip((page - 1) * numberPosts).Take(numberPosts);
-
-			var pagedResult = new PagedResult<Post>
+			var pagedResult = new PagedResult<PostResponse>
 			{
 				CurrentPage = page,
 				PageSize = numberPosts,
 				TotalItems = totalItems,
 				TotalPages = (int)Math.Ceiling(totalItems / (double)numberPosts),
-				Items = [.. posts],
+				Items = [.. postResponseList],
 			};
 
 			return TypedResults.Ok(pagedResult);
@@ -80,35 +71,14 @@ namespace golbym.Api.Endpoints
 
 		private static async Task<IResult> CreatePost(PostRepository postRepository, [FromForm] PostDto postDto, IFormFile? thumbnail)
 		{
-			// if (postDto is null)
-			// 	return TypedResults.BadRequest("Cannot create post");
+			postDto.Author = Role.Admin;
+			postDto.ReleaseDate = DateTime.Now;
 
-			postDto.Id = Guid.NewGuid().ToString();
-			postDto.ReleaseDate = DateOnly.FromDateTime(DateTime.Now);
-			
-			var model = new PostModel(postDto);
+			var newPost = postDto.ToEntity();
+			newPost.Tags = await SetTagsToEntity(postRepository, postDto.Tags);
 
-			var newPost = model.ToEntity("Admin");
-
-			var tagList = postDto.Tags.Replace(" ", "").Split(",");
-
-			foreach (var tagName in tagList)
-			{
-				if (string.IsNullOrEmpty(tagName)) continue;
-				
-				var tag = await postRepository.GetTagByNameAsync(tagName);
-
-				tag ??= new Tag
-				{
-					Id = Guid.NewGuid().ToString(),
-					Name = tagName,
-				};
-
-				newPost.Tags.Add(tag);
-			}
-
-			if (thumbnail is not null) newPost.Thumnail = await UploadFile(thumbnail, newPost.Id);
-			else newPost.Thumnail = "No image";
+			if (thumbnail is not null) newPost.Thumbnail = await UploadFile(thumbnail, newPost.Id);
+			else newPost.Thumbnail = "No image";
 
 			await postRepository.AddAsync(newPost);
 			await postRepository.SaveChangesAsync();
@@ -116,15 +86,8 @@ namespace golbym.Api.Endpoints
 			return TypedResults.Ok(newPost);
 		}
 
-		private static async Task<IResult> UpdatePost(
-			PostRepository postRepository,
-			string postId,
-			[FromForm] PostDto postDto,
-			IFormFile? thumbnail)
+		private static async Task<IResult> UpdatePost(PostRepository postRepository, string postId, [FromForm] PostDto postDto, IFormFile? thumbnail)
 		{
-			// if (postDto is null)
-			// 	return TypedResults.BadRequest("Cannot update post");
-
 			var existPost = await postRepository.GetByIdAsync(postId);
 
 			if (existPost is null)
@@ -134,34 +97,12 @@ namespace golbym.Api.Endpoints
 
 			existPost.Title = postDto.Title;
 			existPost.Content = postDto.Content;
-
-			//existPost.Author = "Admin";
-			//existPost.ReleaseDate = DateOnly.FromDateTime(DateTime.Now);
-
-			var tagList = postDto.Tags
-				.Replace(" ", "")
-				.Split(",");
-
-			foreach (var tagName in tagList)
-			{
-				if (!string.IsNullOrEmpty(tagName))
-				{
-					var tag = await postRepository.GetTagByNameAsync(tagName);
-
-					tag ??= new Tag
-					{
-						Id = Guid.NewGuid().ToString(),
-						Name = tagName,
-					};
-
-					existPost.Tags.Add(tag);
-				}
-			}
+			existPost.Tags = await SetTagsToEntity(postRepository, postDto.Tags);
 
 			if (thumbnail is not null)
 			{
-				File.Delete(Directory.GetCurrentDirectory() + "/Uploads/" + existPost.Thumnail);
-				existPost.Thumnail = await UploadFile(thumbnail, postId);
+				File.Delete(Directory.GetCurrentDirectory() + "/Uploads/" + existPost.Thumbnail);
+				existPost.Thumbnail = await UploadFile(thumbnail, postId);
 			}
 
 			postRepository.Update(existPost);
@@ -177,7 +118,7 @@ namespace golbym.Api.Endpoints
 			if (post is null)
 				return TypedResults.NotFound("There is no post with id=" + id);
 
-			File.Delete(Directory.GetCurrentDirectory() + "/Uploads/" + post.Thumnail);
+			File.Delete(Directory.GetCurrentDirectory() + "/Uploads/" + post.Thumbnail);
 
 			postRepository.Delete(post);
 			await postRepository.SaveChangesAsync();
@@ -207,5 +148,29 @@ namespace golbym.Api.Endpoints
 
 			return fileName;
 		}
+
+		private static async Task<List<Tag>> SetTagsToEntity(PostRepository postRepository, string tags)
+		{
+			var result = new List<Tag>();
+
+            var tagList = tags.Replace(" ", "").Split(",");
+
+            foreach (var tagName in tagList)
+            {
+                if (string.IsNullOrEmpty(tagName)) continue;
+
+                var tag = await postRepository.GetTagByNameAsync(tagName);
+
+                tag ??= new Tag
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Name = tagName,
+                };
+
+                result.Add(tag);
+            }
+
+			return result;
+        }
 	}
 }
