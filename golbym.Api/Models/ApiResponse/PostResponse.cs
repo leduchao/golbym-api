@@ -9,6 +9,8 @@ namespace golbym.Api.Models.ApiResponse
 
         public string Title { get; set; } = master.Title;
 
+        public string ReleaseDate { get; set; } = master.ReleaseDate.ToString("MMM-dd-yyyy");
+
         public string Content { get; set; } = master.Content;
 
         public string Thumbnail { get; set; } = master.Thumbnail;

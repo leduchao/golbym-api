@@ -97,7 +97,8 @@ namespace golbym.Api.Endpoints
 
 			existPost.Title = postDto.Title;
 			existPost.Content = postDto.Content;
-			existPost.Tags = await SetTagsToEntity(postRepository, postDto.Tags);
+			
+			if (!string.IsNullOrEmpty(postDto.Tags)) existPost.Tags.AddRange(await SetTagsToEntity(postRepository, postDto.Tags));
 
 			if (thumbnail is not null)
 			{
