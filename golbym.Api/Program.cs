@@ -27,7 +27,7 @@ builder.Services.Configure<JsonOptions>(options =>
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-	options.UseSqlServer(builder.Configuration.GetConnectionString("SqlDatabase"));
+	options.UseMySQL(builder.Configuration.GetConnectionString("MySqlDb") ?? throw new NullReferenceException("Connection string is invalid"));
 });
 
 builder.Services
@@ -89,6 +89,11 @@ builder.Services.AddScoped<PostRepository>();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+	var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+	db.Database.Migrate();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
