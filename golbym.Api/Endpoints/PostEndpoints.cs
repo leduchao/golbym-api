@@ -78,7 +78,7 @@ namespace golbym.Api.Endpoints
 			newPost.Tags = await SetTagsToEntity(postRepository, postDto.Tags);
 
 			if (thumbnail is not null) newPost.Thumbnail = await UploadFile(thumbnail, newPost.Id);
-			else newPost.Thumbnail = "No image";
+			else newPost.Thumbnail = string.Empty;
 
 			await postRepository.AddAsync(newPost);
 			await postRepository.SaveChangesAsync();
@@ -119,7 +119,8 @@ namespace golbym.Api.Endpoints
 			if (post is null)
 				return TypedResults.NotFound("There is no post with id=" + id);
 
-			File.Delete(Directory.GetCurrentDirectory() + "/Uploads/" + post.Thumbnail);
+			if (!string.IsNullOrEmpty(post.Thumbnail))
+				File.Delete(Directory.GetCurrentDirectory() + "/Uploads/" + post.Thumbnail);
 
 			postRepository.Delete(post);
 			await postRepository.SaveChangesAsync();
